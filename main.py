@@ -1,1 +1,0 @@
-print('Hi! Its first commit')
