@@ -1,0 +1,12 @@
+{
+  "name_of_club": {
+    "type_of_hall": {
+      "price": "price",
+      "seats": "seats",
+      "specifications": "specifications"
+    },
+    "name": "name",
+    "address": "address",
+    "phone": "phone"
+  }
+}
