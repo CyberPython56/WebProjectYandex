@@ -47,6 +47,10 @@ def choose_hall(update, context):
 
 
 def choose_seats(update, context):
+    # if update.message.text not in CLUBS[context.user_data['club']]:
+    #     choose_hall(update, context)
+    #     print(update.message.text)
+    # print(update.message.text)
     context.user_data['hall'] = update.message.text
     update.message.reply_text(f'Сколько мест в зале {context.user_data["hall"]} вам нужно?',
                               reply_markup=ReplyKeyboardRemove())
@@ -54,6 +58,11 @@ def choose_seats(update, context):
 
 
 def choose_date(update, context):
+    # if type(update.message.text) is not int:
+    #     while True:
+    #         update.message.reply_text('Введите число!')
+    #         if type(update.message.text) is int:
+    #             break
     context.user_data['seats'] = update.message.text
     update.message.reply_text(f"Введите дату в формате <dd.mm.yy>:")
     return 4
@@ -73,13 +82,14 @@ def choose_duration(update, context):
 
 def check_booking(update, context):
     context.user_data['duration'] = update.message.text
-    # Здесь буду проверять, есть ли свободные пк на данный момент
+    update.message.reply_text("Проверка корректности введенных данных...")
+
     update.message.reply_text("Проверка наличия компьютеров на это время...")
     if True:
         update.message.reply_text(f"Все отлично!")
         # Здесь будет высчитываться сумма бронирования на основе данных из БД
         sum_of_booking = 1400
-        yes_and_no = [['Yes'], ['No'], ['/menu']]
+        yes_and_no = [['Да'], ['Нет'], ['/menu']]
         markup_yes_and_no = ReplyKeyboardMarkup(yes_and_no, one_time_keyboard=False)
         update.message.reply_text(f"Сумма бронирования составляет {sum_of_booking} рублей. Подтверждаете?",
                                   reply_markup=markup_yes_and_no)
