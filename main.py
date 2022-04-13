@@ -120,7 +120,7 @@ def choose_duration(update, context):
 
 def check_booking(update, context):
     context.user_data['duration'] = update.message.text
-    context.user_data['name'] = update.message.from_user['username'] + '|' + update.message.from_user['full_name']
+    context.user_data['name'] = update.message.from_user['full_name']
     free_computers = []
 
     # try:
@@ -136,8 +136,6 @@ def check_booking(update, context):
         price0 = int(cur.execute(f"""SELECT price FROM halls WHERE vip = '{hall}' 
         AND clubid = {club_id}""").fetchone()[0])
         full_price = price0 * context.user_data['duration'] * context.user_data['seats']
-
-        update.message.reply_text("Проверка наличия компьютеров на это время...")
 
         halls0 = cur.execute(f"""SELECT computerid FROM computers WHERE hallid =
                             (SELECT hallid FROM halls WHERE vip = '{context.user_data['hall']}' AND clubid =
