@@ -1,9 +1,12 @@
 import logging
+
+import telegram
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CommandHandler, ConversationHandler
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import sqlite3
-from datetime import *
+from datetime import time, datetime, timedelta, date
+from math import ceil
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -57,53 +60,82 @@ def choose_seats(update, context):
     #     print(update.message.text)
     # print(update.message.text)
     context.user_data['hall'] = update.message.text
-    button_to_menu = ReplyKeyboardMarkup([['/menu']], one_time_keyboard=False)
+    markup_seats = ReplyKeyboardMarkup([['1', '2', '3', '4', '5'], ['/menu']], one_time_keyboard=False)
     update.message.reply_text(f'Сколько мест в зале {context.user_data["hall"]} вам нужно?',
-                              reply_markup=button_to_menu)
+                              reply_markup=markup_seats)
     return 3
 
 
 def choose_date(update, context):
+    date_today = date.today()
+    dates = [date_today + timedelta(days=x) for x in range(31)]
+    weekdays = {
+        '1': 'пн',
+        '2': 'вт',
+        '3': 'ср',
+        '4': 'чт',
+        '5': 'пт',
+        '6': 'сб',
+        '7': 'вс'
+    }
+    dates0 = [str(date).split('-')[2] + '.' + str(date).split('-')[1] +
+              f' ({weekdays[str(date.weekday() + 1)]})' for date in dates]
+
+    dates = [[] for x in range(ceil(len(dates0) / 4))]
+    dates[0] = dates0[:4]
+    dates[1] = dates0[4:8]
+    dates[2] = dates0[8:12]
+    dates[3] = dates0[12:16]
+    dates[4] = dates0[16:20]
+    dates[5] = dates0[20:24]
+    dates[6] = dates0[24:28]
+    dates[7] = dates0[28:31]
+    dates[7].append('/menu')
+
     # if type(update.message.text) is not int:
     #     while True:
     #         update.message.reply_text('Введите число!')
     #         if type(update.message.text) is int:
     #             break
     context.user_data['seats'] = update.message.text
-    button_to_menu = ReplyKeyboardMarkup([['/menu']], one_time_keyboard=False)
-    update.message.reply_text(f"Введите дату в формате <dd.mm.yy>:", reply_markup=button_to_menu)
+    markup_dates = ReplyKeyboardMarkup(dates, one_time_keyboard=False)
+    update.message.reply_text(f"Выберите дату:", reply_markup=markup_dates)
     return 4
 
 
 def choose_time(update, context):
     context.user_data['date'] = update.message.text
     button_to_menu = ReplyKeyboardMarkup([['/menu']], one_time_keyboard=False)
-    update.message.reply_text("Введите начальное время в формате <HH:MM>:", reply_markup=button_to_menu)
+    update.message.reply_text("Введите время бронирования в формате <HH:MM>:", reply_markup=button_to_menu)
     return 5
 
 
 def choose_duration(update, context):
     context.user_data['time'] = update.message.text
-    button_to_menu = ReplyKeyboardMarkup([['/menu']], one_time_keyboard=False)
-    update.message.reply_text("Введите продолжительность бронирования в часах (число):", reply_markup=button_to_menu)
+    durations = [[str(x) for x in range(1, 6)], [str(x) for x in range(6, 11)], ['/menu']]
+    markup_durations = ReplyKeyboardMarkup(durations, one_time_keyboard=False)
+    update.message.reply_text("Выберите продолжительность бронирования (в часах):", reply_markup=markup_durations)
     return 6
 
 
 def check_booking(update, context):
     context.user_data['duration'] = update.message.text
-    flag_booking_complete = False
+    context.user_data['name'] = update.message.from_user['username'] + '|' + update.message.from_user['full_name']
     free_computers = []
+
     # try:
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
         hall = context.user_data['hall']
         club = context.user_data['club']
-        print(hall, club)
+        context.user_data['date'] = context.user_data['date'][:5]
+        context.user_data['seats'] = int(context.user_data['seats'])
+        context.user_data['duration'] = int(context.user_data['duration'])
+
         club_id = cur.execute(f"""SELECT clubid FROM clubs WHERE title = '{club}'""").fetchone()[0]
-        price0 = cur.execute(f"""SELECT price FROM halls WHERE vip = '{hall}' AND clubid = {club_id}""").fetchone()
-        # price = int(price0)
-        print(price0)
-        full_price = price0 * int(context.user_data['duration']) * int(context.user_data['seats'])
+        price0 = int(cur.execute(f"""SELECT price FROM halls WHERE vip = '{hall}' 
+        AND clubid = {club_id}""").fetchone()[0])
+        full_price = price0 * context.user_data['duration'] * context.user_data['seats']
 
         update.message.reply_text("Проверка наличия компьютеров на это время...")
 
@@ -117,17 +149,19 @@ def check_booking(update, context):
             if can_booking(context.user_data['date'], context.user_data['time'], context.user_data['duration'], id):
                 free_computers.append(id)
 
+        if len(free_computers) >= context.user_data['seats']:
+            update.message.reply_text(f"Все отлично!")
+            context.user_data['computers'] = free_computers[:context.user_data['seats']]
 
-        # if True:
-        #     update.message.reply_text(f"Все отлично!")
-        #     # Здесь будет высчитываться сумма бронирования на основе данных из БД
-        #
-        #     yes_and_no = [['Да'], ['Нет'], ['/menu']]
-        #     markup_yes_and_no = ReplyKeyboardMarkup(yes_and_no, one_time_keyboard=False)
-        #     update.message.reply_text(f"Сумма бронирования составляет {full_price} рублей. Подтверждаете?",
-        #                               reply_markup=markup_yes_and_no)
-        # else:
-        #     update.message.reply_text("К сожалению, свободных ПК нет на это время(")
+            print(context.user_data['name'])
+            context.user_data['full_price'] = full_price
+
+            yes_and_no = [['Да'], ['Нет'], ['/menu']]
+            markup_yes_and_no = ReplyKeyboardMarkup(yes_and_no, one_time_keyboard=False)
+            update.message.reply_text(f"Сумма бронирования составляет {full_price} рублей. Подтверждаете?",
+                                      reply_markup=markup_yes_and_no)
+        else:
+            update.message.reply_text("К сожалению, свободных ПК нет на это время(")
 
     # except Exception:
     #     update.message.reply_text('Неправильно введены данные. Повторите попытку')
@@ -136,21 +170,32 @@ def check_booking(update, context):
     return 7
 
 
-def print_result(update, context):
+def boooking_sqlite(update, context):
     if update.message.text == 'Да':
+        with sqlite3.connect('YandexProject.sqlite') as con:
+            cur = con.cursor()
+
+            for i in context.user_data['computers']:
+                cur.execute(f"""INSERT INTO booking(ComputerId, date, time_start, time_finish, 
+                full_price, name) VALUES({i}, '{context.user_data['date']}', 
+                '{context.user_data['time']}', '{str(int(context.user_data['time'].split(':')[0])
+                                                     + context.user_data['duration']) + ':' + str(context.user_data['time'].split(':')[1])}', 
+                {context.user_data['full_price']}, '{context.user_data['name']}')""")
+
         update.message.reply_text('Успешное бронирование!', reply_markup=ReplyKeyboardRemove())
+        context.user_data.clear()
         stop_to_menu(update, context)
         return ConversationHandler.END
     else:
         update.message.reply_text('Неудачно', reply_markup=ReplyKeyboardRemove())
         stop_to_menu(update, context)
-    context.user_data.clear()
+        return ConversationHandler.END
 
 
 def can_booking(date, time_start, duration, computer):
     flag_can_booking = True
-    time_finish = str(int(time_start.split(':')[0]) + duration) + ':' + time_start.split(':')[1]
-    print(time_finish)
+    time_finish = str(int(time_start.split(':')[0]) + duration) + ':' + str(time_start.split(':')[1])
+
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
         bookings = cur.execute(f"""SELECT * FROM Booking WHERE ComputerId = {computer}
@@ -281,7 +326,7 @@ def main():
             4: [MessageHandler(Filters.text & ~Filters.command, choose_time)],
             5: [MessageHandler(Filters.text & ~Filters.command, choose_duration)],
             6: [MessageHandler(Filters.text & ~Filters.command, check_booking)],
-            7: [MessageHandler(Filters.text & ~Filters.command, print_result)]
+            7: [MessageHandler(Filters.text & ~Filters.command, boooking_sqlite)]
         },
         fallbacks=[CommandHandler('menu', stop_to_menu)])
 
