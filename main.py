@@ -121,51 +121,93 @@ def choose_duration(update, context):
 
 
 def check_booking(update, context):
-    context.user_data['duration'] = update.message.text
-    context.user_data['name'] = update.message.from_user['full_name']
-    free_computers = []
-
-    # try:
-    with sqlite3.connect('YandexProject.sqlite') as con:
-        cur = con.cursor()
-        hall = context.user_data['hall']
-        club = context.user_data['club']
+    try:
+        context.user_data['duration'] = update.message.text
+        context.user_data['name'] = update.message.from_user['full_name']
         context.user_data['date'] = context.user_data['date'][:5]
         context.user_data['seats'] = int(context.user_data['seats'])
         context.user_data['duration'] = int(context.user_data['duration'])
+        time_finish = str(int(context.user_data['time'].split(':')[0]) + context.user_data['duration']) \
+                      + ':' + str(context.user_data['time'].split(':')[1])
 
-        club_id = cur.execute(f"""SELECT clubid FROM clubs WHERE title = '{club}'""").fetchone()[0]
-        price0 = int(cur.execute(f"""SELECT price FROM halls WHERE vip = '{hall}' 
-        AND clubid = {club_id}""").fetchone()[0])
-        full_price = price0 * context.user_data['duration'] * context.user_data['seats']
-
-        halls0 = cur.execute(f"""SELECT computerid FROM computers WHERE hallid =
-                            (SELECT hallid FROM halls WHERE vip = '{context.user_data['hall']}' AND clubid =
-                            (SELECT clubid FROM clubs WHERE title = '{context.user_data['club']}'))""").fetchall()
-        seats = list(map(lambda x: x[1:-2], list(map(str, halls0))))
-
-        for i in range(len(seats)):
-            id = seats[i]
-            if can_booking(context.user_data['date'], context.user_data['time'], context.user_data['duration'], id):
-                free_computers.append(id)
-
-        if len(free_computers) >= context.user_data['seats']:
-            update.message.reply_text(f"Все отлично!")
-            context.user_data['computers'] = free_computers[:context.user_data['seats']]
-
-            print(context.user_data['name'])
-            context.user_data['full_price'] = full_price
-
-            yes_and_no = [['Да'], ['Нет'], ['/menu']]
-            markup_yes_and_no = ReplyKeyboardMarkup(yes_and_no, one_time_keyboard=False)
-            update.message.reply_text(f"Сумма бронирования составляет {full_price} рублей. Подтверждаете?",
-                                      reply_markup=markup_yes_and_no)
+        if int(time_finish.split(':')[0]) > 23:
+            time_finish = '0' + str(int(time_finish.split(':')[0]) - 24) + ':' + time_finish.split(':')[1]
+            time_finish_ = datetime(year=2022, month=1, day=2, hour=int(time_finish.split(':')[0]),
+                                    minute=int(time_finish.split(':')[1]))
+            time_start_ = datetime(year=2022, month=1, day=1, hour=int(context.user_data['time'].split(':')[0]),
+                                   minute=int(context.user_data['time'].split(':')[1]))
+        elif int(time_finish.split(':')[0]) < 11 and int(context.user_data['time'].split(':')[0]) < 1:
+            time_finish_ = datetime(year=2022, month=1, day=2, hour=int(time_finish.split(':')[0]),
+                                    minute=int(time_finish.split(':')[1]))
+            time_start_ = datetime(year=2022, month=1, day=2, hour=int(context.user_data['time'].split(':')[0]),
+                                   minute=int(context.user_data['time'].split(':')[1]))
         else:
-            update.message.reply_text("К сожалению, свободных ПК нет на это время(")
+            time_finish_ = datetime(year=2022, month=1, day=1, hour=int(time_finish.split(':')[0]),
+                                    minute=int(time_finish.split(':')[1]))
+            time_start_ = datetime(year=2022, month=1, day=1, hour=int(context.user_data['time'].split(':')[0]),
+                                   minute=int(context.user_data['time'].split(':')[1]))
+        context.user_data['time_finish'] = time_finish
+        hall = context.user_data['hall']
+        club = context.user_data['club']
+        free_computers = []
 
-    # except Exception:
-    #     update.message.reply_text('Неправильно введены данные. Повторите попытку')
-    #     stop_to_menu(update, context)
+        time_out_start = datetime(year=2022, month=1, day=2, hour=0, minute=0)
+        time_out_finish = datetime(year=2022, month=1, day=2, hour=1, minute=0)
+
+        print(time_start_)
+        print(time_finish_)
+        print(time_out_start)
+        print(time_out_finish)
+
+        if (time_out_start <= time_start_ < time_out_finish
+            or time_out_start < time_finish_ <= time_out_finish) \
+                or (time_start_ < time_out_start and time_finish_ > time_out_finish) \
+                or (time_start_ > time_out_start and time_finish_ < time_out_start + time_out_finish):
+            update.message.reply_text(emoji.emojize(f'К сожалению, с 00:00 до 01:00 мы обязаны проводить '
+                                                    f'техническое обслуживание, чтобы поддерживать компьютеры '
+                                                    f'в рабочем состоянии.:pensive_face:'
+                                                    f'\nВыберите другое время'))
+            print('here')
+            stop_to_menu(update, context)
+            return ConversationHandler.END
+
+        with sqlite3.connect('YandexProject.sqlite') as con:
+            cur = con.cursor()
+            club_id = cur.execute(f"""SELECT clubid FROM clubs WHERE title = '{club}'""").fetchone()[0]
+            price0 = int(cur.execute(f"""SELECT price FROM halls WHERE vip = '{hall}' 
+                AND clubid = {club_id}""").fetchone()[0])
+            full_price = price0 * context.user_data['duration'] * context.user_data['seats']
+
+            halls0 = cur.execute(f"""SELECT computerid FROM computers WHERE hallid = (SELECT hallid 
+            FROM halls WHERE vip = '{context.user_data['hall']}' AND clubid = (SELECT clubid 
+            FROM clubs WHERE title = '{context.user_data['club']}'))""").fetchall()
+            seats = list(map(lambda x: x[1:-2], list(map(str, halls0))))
+
+            for i in range(len(seats)):
+                id = seats[i]
+                if can_booking(context.user_data['date'], context.user_data['time'],
+                               context.user_data['time_finish'], id):
+                    free_computers.append(id)
+
+            if len(free_computers) >= context.user_data['seats']:
+                update.message.reply_text(f"Все отлично!")
+                context.user_data['computers'] = free_computers[:context.user_data['seats']]
+
+                print(context.user_data['name'])
+                context.user_data['full_price'] = full_price
+
+                yes_and_no = [['Да'], ['Нет'], ['/menu']]
+                markup_yes_and_no = ReplyKeyboardMarkup(yes_and_no, one_time_keyboard=False)
+                update.message.reply_text(f"Сумма бронирования составляет {full_price} рублей. Подтверждаете?",
+                                          reply_markup=markup_yes_and_no)
+            else:
+                update.message.reply_text("К сожалению, свободных ПК нет на это время(")
+
+    except Exception as e:
+        update.message.reply_text(emoji.emojize(':red_exclamation_mark:Неправильно введены данные. '
+                                                'Повторите попытку:red_exclamation_mark:'))
+        print(type(e))
+        stop_to_menu(update, context)
 
     return 7
 
@@ -178,9 +220,7 @@ def booking_sqlite(update, context):
             for i in context.user_data['computers']:
                 cur.execute(f"""INSERT INTO booking(ComputerId, date, time_start, time_finish, 
                 full_price, name) VALUES({i}, '{context.user_data['date']}', 
-                '{context.user_data['time']}', '{str(int(context.user_data['time'].split(':')[0])
-                                                     + context.user_data['duration']) + ':' +
-                                                 str(context.user_data['time'].split(':')[1])}', 
+                '{context.user_data['time']}', '{context.user_data['time_finish']}', 
                 {context.user_data['full_price']}, '{context.user_data['name']}')""")
 
         update.message.reply_text(emoji.emojize(':check_mark_button:Успешное бронирование!'),
@@ -194,9 +234,8 @@ def booking_sqlite(update, context):
         return ConversationHandler.END
 
 
-def can_booking(date, time_start, duration, computer):
+def can_booking(date, time_start, time_finish, computer):
     flag_can_booking = True
-    time_finish = str(int(time_start.split(':')[0]) + duration) + ':' + str(time_start.split(':')[1])
 
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
@@ -261,11 +300,14 @@ def print_names_clubs(update, context):
     num_of_clubs = len(clubs) - 1
 
     if num_of_clubs == 1:
-        reply_text = f"Всего у нас {num_of_clubs} клуб. "
+        reply_text = f"Всего у нас {num_of_clubs} клуб, " \
+                     f"работающий круглосуточно с техническим перерывом с 00:00 до 01:00. "
     elif num_of_clubs in [2, 3, 4]:
-        reply_text = f"Всего у нас {num_of_clubs} клуба. "
+        reply_text = f"Всего у нас {num_of_clubs} клуба, " \
+                     f"все работают круглосуточно с техническим перерывом с 00:00 до 01:00. "
     else:
-        reply_text = f"Всего у нас {num_of_clubs} клубов. "
+        reply_text = f"Всего у нас {num_of_clubs} клубов, " \
+                     f"все работают круглосуточно с техническим перерывом с 00:00 до 01:00. "
     reply_text += 'Выберите нужный'
 
     update.message.reply_text(reply_text, reply_markup=markup_clubs)
