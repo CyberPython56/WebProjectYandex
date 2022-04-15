@@ -5,7 +5,6 @@
       "seats": "seats",
       "specifications": "specifications"
     },
-    "name": "name",
     "address": "address",
     "phone": "phone"
   }
