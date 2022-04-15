@@ -1,12 +1,12 @@
 import logging
-
-import telegram
+import copy
 from telegram.ext import Updater, MessageHandler, Filters
 from telegram.ext import CommandHandler, ConversationHandler
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 import sqlite3
 from datetime import time, datetime, timedelta, date
 from math import ceil
+import emoji
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -19,16 +19,17 @@ CLUBS = {}
 
 
 def menu(update, context):
-    reply_keyboard = [['/info', '/booking'], ['/check_booking']]
+    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking']]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
     update.message.reply_text("Выберите команду, интересующую вас.", reply_markup=markup)
 
 
 def start(update, context):
-    reply_keyboard = [['/info', '/booking'], ['/check_booking']]
+    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking']]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
-    update.message.reply_text("Привет! Я бот Игорь, созданный для бронирования компьютеров в компьютерном клубе! "
-                              "Выберите команду, интересующую вас.", reply_markup=markup)
+    update.message.reply_text(
+        emoji.emojize("Привет! Я бот Игорь, созданный для бронирования :desktop_computer: в компьютерном клубе! "
+                      "Выберите команду, интересующую вас."), reply_markup=markup)
 
 
 def choose_club(update, context):
@@ -45,7 +46,7 @@ def choose_hall(update, context):
         choose_club(update, context)
     else:
         context.user_data['club'] = update.message.text
-        halls = [[x] for x in CLUBS[context.user_data['club']]]
+        halls = [[x] for x in CLUBS[context.user_data['club']] if x != 'phone' and x != 'address']
         halls.append(['/menu'])
 
         markup_halls = ReplyKeyboardMarkup(halls, one_time_keyboard=False)
@@ -61,8 +62,9 @@ def choose_seats(update, context):
     # print(update.message.text)
     context.user_data['hall'] = update.message.text
     markup_seats = ReplyKeyboardMarkup([['1', '2', '3', '4', '5'], ['/menu']], one_time_keyboard=False)
-    update.message.reply_text(f'Сколько мест в зале {context.user_data["hall"]} вам нужно?',
-                              reply_markup=markup_seats)
+
+    update.message.reply_text(f'Сколько мест в зале {context.user_data["hall"]} вам нужно?', reply_markup=markup_seats)
+
     return 3
 
 
@@ -168,7 +170,7 @@ def check_booking(update, context):
     return 7
 
 
-def boooking_sqlite(update, context):
+def booking_sqlite(update, context):
     if update.message.text == 'Да':
         with sqlite3.connect('YandexProject.sqlite') as con:
             cur = con.cursor()
@@ -177,10 +179,12 @@ def boooking_sqlite(update, context):
                 cur.execute(f"""INSERT INTO booking(ComputerId, date, time_start, time_finish, 
                 full_price, name) VALUES({i}, '{context.user_data['date']}', 
                 '{context.user_data['time']}', '{str(int(context.user_data['time'].split(':')[0])
-                                                     + context.user_data['duration']) + ':' + str(context.user_data['time'].split(':')[1])}', 
+                                                     + context.user_data['duration']) + ':' +
+                                                 str(context.user_data['time'].split(':')[1])}', 
                 {context.user_data['full_price']}, '{context.user_data['name']}')""")
 
-        update.message.reply_text('Успешное бронирование!', reply_markup=ReplyKeyboardRemove())
+        update.message.reply_text(emoji.emojize(':check_mark_button:Успешное бронирование!'),
+                                  reply_markup=ReplyKeyboardRemove())
         context.user_data.clear()
         stop_to_menu(update, context)
         return ConversationHandler.END
@@ -225,10 +229,6 @@ def check_time(t0_self, t1_self, t0_other, t1_other):
     return False
 
 
-def booking_sqlite():
-    pass
-
-
 def load_info_of_clubs():
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
@@ -238,14 +238,20 @@ def load_info_of_clubs():
             halls = cur.execute(f"""SELECT VIP FROM Halls WHERE ClubId = (SELECT ClubId FROM Clubs 
             WHERE title = '{club}')""").fetchall()
             CLUBS[club] = {}
+            address_and_phone = cur.execute(f"""SELECT address, phone FROM CLubs WHERE title = '{club}'""").fetchone()
+            CLUBS[club]['address'] = address_and_phone[0]
+            CLUBS[club]['phone'] = address_and_phone[1]
             for hall in halls:
                 info_of_hall = cur.execute(f"""SELECT seats, price, specifications FROM Halls 
                 WHERE VIP = '{hall[0]}' AND ClubId = (SELECT ClubId FROM Clubs WHERE title = '{club}')""").fetchall()
-
                 seats = info_of_hall[0][0]
                 price = info_of_hall[0][1]
                 specifications = info_of_hall[0][2]
-                CLUBS[club][hall[0]] = {'price': price, 'seats': seats, 'specifications': specifications}
+                CLUBS[club][hall[0]] = {
+                    'price': price,
+                    'seats': seats,
+                    'specifications': specifications
+                }
 
 
 def print_names_clubs(update, context):
@@ -268,13 +274,17 @@ def print_names_clubs(update, context):
 
 def print_info_about_club(update, context):
     club = update.message.text
-    halls = CLUBS[club]
+    halls = copy.copy(CLUBS[club])
+    del halls['phone']
+    del halls['address']
+
     if len(halls) == 1:
         reply_text = f"В клубе {club} {len(halls)} зал.\n"
     else:
         reply_text = f"В клубе {club} {len(halls)} зала.\n"
     for hall in halls:
         # Указываем места в соответствии с числом
+        reply_text += emoji.emojize(':green_circle: ')
         if str(CLUBS[club][hall]['seats'])[-1] == '1' and str(CLUBS[club][hall]['seats'])[-2:] != '11':
             reply_text += f"{hall.capitalize()} - {CLUBS[club][hall]['seats']} место, "
         elif str(CLUBS[club][hall]['seats'])[-1] in ['2', '3', '4'] \
@@ -293,8 +303,18 @@ def print_info_about_club(update, context):
             reply_text += f"{CLUBS[club][hall]['price']} рублей/час. "
         reply_text += f"Характеристики: {CLUBS[club][hall]['specifications']}.\n"
 
+    reply_text += emoji.emojize(f":globe_showing_Europe-Africa:Адрес: {CLUBS[club]['address']}\n") + \
+                  emoji.emojize(f":mobile_phone:Телефон: {CLUBS[club]['phone']}")
     update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
     menu(update, context)
+
+
+def get_users_booking(update, context):
+    pass
+
+
+def choose_canceling_booking(update, context):
+    pass
 
 
 def stop_to_menu(update, context):
@@ -324,25 +344,25 @@ def main():
             4: [MessageHandler(Filters.text & ~Filters.command, choose_time)],
             5: [MessageHandler(Filters.text & ~Filters.command, choose_duration)],
             6: [MessageHandler(Filters.text & ~Filters.command, check_booking)],
-            7: [MessageHandler(Filters.text & ~Filters.command, boooking_sqlite)]
+            7: [MessageHandler(Filters.text & ~Filters.command, booking_sqlite)]
         },
         fallbacks=[CommandHandler('menu', stop_to_menu)])
 
-    conv_handler_info = ConversationHandler(
-        entry_points=[CommandHandler('info', print_names_clubs)],
+    conv_handler_clubs = ConversationHandler(
+        entry_points=[CommandHandler('clubs', print_names_clubs)],
         states={
             1: [MessageHandler(Filters.text & ~Filters.command, print_info_about_club)],
         },
         fallbacks=[CommandHandler('menu', menu)])
 
     dp.add_handler(conv_handler_booking)
-    dp.add_handler(conv_handler_info)
+    dp.add_handler(conv_handler_clubs)
 
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('help', help))
     dp.add_handler(CommandHandler('booking', choose_club))
     dp.add_handler(CommandHandler('menu', menu))
-    dp.add_handler(CommandHandler('info', print_names_clubs))
+    dp.add_handler(CommandHandler('clubs', print_names_clubs))
     dp.add_handler(CommandHandler('close', close_keyboard))
 
     updater.start_polling()
