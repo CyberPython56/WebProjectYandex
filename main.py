@@ -14,18 +14,21 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Алиса
+TOKEN = '5300053238:AAFoAKrEeah5ycAbO7oCPUh9jLVZRfvmAHo'
+# Игорь
 TOKEN = '5110951414:AAF17EXuVIoLbUcDzieFwTF-WqwGtfQD1dM'
 CLUBS = {}
 
 
 def menu(update, context):
-    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking']]
+    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking', '/info']]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
     update.message.reply_text("Выберите команду, интересующую вас.", reply_markup=markup)
 
 
 def start(update, context):
-    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking']]
+    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking', '/info']]
     markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
     update.message.reply_text(
         emoji.emojize("Привет! Я бот Игорь, созданный для бронирования :desktop_computer: в компьютерном клубе! "
@@ -167,7 +170,6 @@ def check_booking(update, context):
                                                     f'техническое обслуживание, чтобы поддерживать компьютеры '
                                                     f'в рабочем состоянии.:pensive_face:'
                                                     f'\nВыберите другое время'))
-            print('here')
             stop_to_menu(update, context)
             return ConversationHandler.END
 
@@ -221,7 +223,8 @@ def booking_sqlite(update, context):
                 cur.execute(f"""INSERT INTO booking(ComputerId, date, time_start, time_finish, 
                 full_price, name) VALUES({i}, '{context.user_data['date']}', 
                 '{context.user_data['time']}', '{context.user_data['time_finish']}', 
-                {context.user_data['full_price']}, '{context.user_data['name']}')""")
+                {context.user_data['full_price'] / len(context.user_data['computers'])}, 
+                '{context.user_data['name']}')""")
 
         update.message.reply_text(emoji.emojize(':check_mark_button:Успешное бронирование!'),
                                   reply_markup=ReplyKeyboardRemove())
@@ -352,11 +355,55 @@ def print_info_about_club(update, context):
 
 
 def get_users_booking(update, context):
-    pass
+    with sqlite3.connect('YandexProject.sqlite') as con:
+        cur = con.cursor()
+        name = update.message.from_user['full_name']
+        users_bookings0 = cur.execute(f"""SELECT * FROM booking WHERE name = '{name}'""").fetchall()
+        users_bookings = []
+
+        for booking in users_bookings0:
+            hall = cur.execute(f"""SELECT VIP FROM halls WHERE hallid = (SELECT hallid FROM computers 
+            WHERE computerid = {booking[1]})""").fetchone()[0]
+            club = cur.execute(f"""SELECT title FROM clubs WHERE clubid = (SELECT clubid FROM halls 
+            WHERE hallid = (SELECT hallid FROM computers WHERE computerid = {booking[1]}))""").fetchone()[0]
+            row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. ' \
+                  f'Общая стоимость {booking[6]} рублей'
+            if [row] not in users_bookings:
+                users_bookings.append([row])
+            users_bookings = sorted(users_bookings, key=lambda x: x[0].split()[4])
+
+        users_bookings.append(['/menu'])
+        markup_bookings = ReplyKeyboardMarkup(users_bookings, one_time_keyboard=False)
+        update.message.reply_text('Выберите бронирование, которое хотите отменить', reply_markup=markup_bookings)
+    return 1
 
 
-def choose_canceling_booking(update, context):
-    pass
+def canceling_booking(update, context):
+    try:
+        date = update.message.text.split()[4]
+        time_start = update.message.text.split()[6]
+        time_finish = update.message.text.split()[8][:-1]
+        price = int(update.message.text.split()[11])
+        with sqlite3.connect('YandexProject.sqlite') as con:
+            cur = con.cursor()
+            cur.execute(f"""DELETE FROM Booking WHERE name = '{update.message.from_user['full_name']}' AND date = 
+            '{date}' AND time_start = '{time_start}' AND time_finish = '{time_finish}' AND full_price = {price}""")
+        update.message.reply_text(emoji.emojize(':check_mark_button:Бронирование отменено'))
+    except Exception as e:
+        update.message.reply_text(emoji.emojize(':red_exclamation_mark:Ошибка введенных данных. '
+                                                'Повторите попытку:red_exclamation_mark:'))
+        print(type(e))
+    return ConversationHandler.END
+
+
+def info(update, context):
+    update.message.reply_text(emoji.emojize(":information:Я выпускной проект ученика Яндекс Лицея. Помимо этой "
+                                            "у меня есть еще 3 команды:"
+                                            "\n/clubs - узнать информацию о каждом клубе"
+                                            "\n/booking - сделать бронирование"
+                                            "\n/cancel_booking - отменить бронь"
+                                            "\nЕсли вы заметите ошибку в моей работе, то просьба сообщить об этом "
+                                            "@Roma5656"))
 
 
 def stop_to_menu(update, context):
@@ -395,16 +442,25 @@ def main():
         states={
             1: [MessageHandler(Filters.text & ~Filters.command, print_info_about_club)],
         },
-        fallbacks=[CommandHandler('menu', menu)])
+        fallbacks=[CommandHandler('menu', stop_to_menu)])
+
+    conv_handler_cancel_booking = ConversationHandler(
+        entry_points=[CommandHandler('cancel_booking', get_users_booking)],
+        states={
+            1: [MessageHandler(Filters.text & ~Filters.command, canceling_booking)],
+        },
+        fallbacks=[CommandHandler('menu', stop_to_menu)])
 
     dp.add_handler(conv_handler_booking)
     dp.add_handler(conv_handler_clubs)
+    dp.add_handler(conv_handler_cancel_booking)
 
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('help', help))
     dp.add_handler(CommandHandler('booking', choose_club))
     dp.add_handler(CommandHandler('menu', menu))
     dp.add_handler(CommandHandler('clubs', print_names_clubs))
+    dp.add_handler(CommandHandler('info', info))
     dp.add_handler(CommandHandler('close', close_keyboard))
 
     updater.start_polling()
