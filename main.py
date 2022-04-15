@@ -59,10 +59,6 @@ def choose_hall(update, context):
 
 
 def choose_seats(update, context):
-    # if update.message.text not in CLUBS[context.user_data['club']]:
-    #     choose_hall(update, context)
-    #     print(update.message.text)
-    # print(update.message.text)
     context.user_data['hall'] = update.message.text
     markup_seats = ReplyKeyboardMarkup([['1', '2', '3', '4', '5'], ['/menu']], one_time_keyboard=False)
 
@@ -97,11 +93,6 @@ def choose_date(update, context):
     dates[7] = dates0[28:31]
     dates[7].append('/menu')
 
-    # if type(update.message.text) is not int:
-    #     while True:
-    #         update.message.reply_text('Введите число!')
-    #         if type(update.message.text) is int:
-    #             break
     context.user_data['seats'] = update.message.text
     markup_dates = ReplyKeyboardMarkup(dates, one_time_keyboard=False)
     update.message.reply_text(f"Выберите дату:", reply_markup=markup_dates)
@@ -157,11 +148,6 @@ def check_booking(update, context):
         time_out_start = datetime(year=2022, month=1, day=2, hour=0, minute=0)
         time_out_finish = datetime(year=2022, month=1, day=2, hour=1, minute=0)
 
-        print(time_start_)
-        print(time_finish_)
-        print(time_out_start)
-        print(time_out_finish)
-
         if (time_out_start <= time_start_ < time_out_finish
             or time_out_start < time_finish_ <= time_out_finish) \
                 or (time_start_ < time_out_start and time_finish_ > time_out_finish) \
@@ -195,7 +181,6 @@ def check_booking(update, context):
                 update.message.reply_text(f"Все отлично!")
                 context.user_data['computers'] = free_computers[:context.user_data['seats']]
 
-                print(context.user_data['name'])
                 context.user_data['full_price'] = full_price
 
                 yes_and_no = [['Да'], ['Нет'], ['/menu']]
