@@ -391,6 +391,11 @@ def info(update, context):
                                             "@Roma5656"))
 
 
+def unrecorgnized_command(update, context):
+    update.message.reply_text(
+        emoji.emojize('Нераспознанная команда. Пожалуйста, выберите то, что я знаю:slightly_frowning_face:'))
+
+
 def stop_to_menu(update, context):
     menu(update, context)
     return ConversationHandler.END
@@ -408,6 +413,8 @@ def main():
     updater = Updater(TOKEN)
     load_info_of_clubs()
     dp = updater.dispatcher
+
+    text_handler = MessageHandler(Filters.text, unrecorgnized_command)
 
     conv_handler_booking = ConversationHandler(
         entry_points=[CommandHandler('booking', choose_club)],
@@ -447,6 +454,8 @@ def main():
     dp.add_handler(CommandHandler('clubs', print_names_clubs))
     dp.add_handler(CommandHandler('info', info))
     dp.add_handler(CommandHandler('close', close_keyboard))
+
+    dp.add_handler(text_handler)
 
     updater.start_polling()
     updater.idle()
