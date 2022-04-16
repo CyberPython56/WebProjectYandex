@@ -1,12 +1,13 @@
-import logging
 import copy
-from telegram.ext import Updater, MessageHandler, Filters
-from telegram.ext import CommandHandler, ConversationHandler
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+import logging
 import sqlite3
 from datetime import time, datetime, timedelta, date
 from math import ceil
+
 import emoji
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import CommandHandler, ConversationHandler
+from telegram.ext import Updater, MessageHandler, Filters
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Алиса
 TOKEN = '5300053238:AAFoAKrEeah5ycAbO7oCPUh9jLVZRfvmAHo'
 # Игорь
-TOKEN = '5110951414:AAF17EXuVIoLbUcDzieFwTF-WqwGtfQD1dM'
+# TOKEN = '5110951414:AAF17EXuVIoLbUcDzieFwTF-WqwGtfQD1dM'
 CLUBS = {}
 
 
@@ -39,7 +40,7 @@ def choose_club(update, context):
     clubs = [[x] for x in CLUBS.keys()]
     clubs.append(['/menu'])
     markup_clubs = ReplyKeyboardMarkup(clubs, one_time_keyboard=False)
-    update.message.reply_text('Выберите компьютерный клуб, в котором хотите сделать бронирование',
+    update.message.reply_text('Выберите компьютерный клуб, в котором хотите сделать бронирование:',
                               reply_markup=markup_clubs)
     return 1
 
@@ -124,6 +125,23 @@ def check_booking(update, context):
         time_finish = str(int(context.user_data['time'].split(':')[0]) + context.user_data['duration']) \
                       + ':' + str(context.user_data['time'].split(':')[1])
 
+        # Проверка, что время бронирования после нынешнего
+
+        datetime_now = datetime.now()
+        time_start_now = datetime(year=datetime_now.year, month=int(context.user_data['date'].split('.')[1]),
+                                  day=int(context.user_data['date'].split('.')[0]),
+                                  hour=int(context.user_data['time'].split(':')[0]),
+                                  minute=int(context.user_data['time'].split(':')[1]))
+
+        if time_start_now <= datetime_now:
+            update.message.reply_text(emoji.emojize(
+                ':red_exclamation_mark:Время бронирования не может быть раньше нынешнего! '
+                'Повторите попытку:red_exclamation_mark:'))
+            stop_to_menu(update, context)
+            return ConversationHandler.END
+
+        # Проверка совпадания времени с техническим перерывом
+
         if int(time_finish.split(':')[0]) > 23:
             time_finish = '0' + str(int(time_finish.split(':')[0]) - 24) + ':' + time_finish.split(':')[1]
             time_finish_ = datetime(year=2022, month=1, day=2, hour=int(time_finish.split(':')[0]),
@@ -140,6 +158,7 @@ def check_booking(update, context):
                                     minute=int(time_finish.split(':')[1]))
             time_start_ = datetime(year=2022, month=1, day=1, hour=int(context.user_data['time'].split(':')[0]),
                                    minute=int(context.user_data['time'].split(':')[1]))
+
         context.user_data['time_finish'] = time_finish
         hall = context.user_data['hall']
         club = context.user_data['club']
@@ -195,6 +214,7 @@ def check_booking(update, context):
                                                 'Повторите попытку:red_exclamation_mark:'))
         print(type(e))
         stop_to_menu(update, context)
+        return ConversationHandler.END
 
     return 7
 
@@ -213,7 +233,6 @@ def booking_sqlite(update, context):
 
         update.message.reply_text(emoji.emojize(':check_mark_button:Успешное бронирование!'),
                                   reply_markup=ReplyKeyboardRemove())
-        context.user_data.clear()
         stop_to_menu(update, context)
         return ConversationHandler.END
     else:
@@ -336,26 +355,36 @@ def print_info_about_club(update, context):
     reply_text += emoji.emojize(f":globe_showing_Europe-Africa:Адрес: {CLUBS[club]['address']}\n") + \
                   emoji.emojize(f":mobile_phone:Телефон: {CLUBS[club]['phone']}")
     update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
-    menu(update, context)
+    stop_to_menu(update, context)
+    return ConversationHandler.END
 
 
 def get_users_booking(update, context):
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
         name = update.message.from_user['full_name']
+        datetime_now = datetime.now()
+
         users_bookings0 = cur.execute(f"""SELECT * FROM booking WHERE name = '{name}'""").fetchall()
         users_bookings = []
-
         for booking in users_bookings0:
             hall = cur.execute(f"""SELECT VIP FROM halls WHERE hallid = (SELECT hallid FROM computers 
             WHERE computerid = {booking[1]})""").fetchone()[0]
             club = cur.execute(f"""SELECT title FROM clubs WHERE clubid = (SELECT clubid FROM halls 
             WHERE hallid = (SELECT hallid FROM computers WHERE computerid = {booking[1]}))""").fetchone()[0]
-            row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. ' \
-                  f'Общая стоимость {booking[6]} рублей'
-            if [row] not in users_bookings:
-                users_bookings.append([row])
-            users_bookings = sorted(users_bookings, key=lambda x: x[0].split()[4])
+            # Удаление старых бронирований
+            datetime_booking = datetime(year=datetime_now.year, month=int(booking[3].split('.')[1]),
+                                        day=int(booking[3].split('.')[0]), hour=int(booking[5].split(':')[0]),
+                                        minute=int(booking[5].split(':')[1]))
+            if datetime_booking < datetime_now:
+                cur.execute(f"""DELETE FROM booking WHERE bookingid = {booking[0]}""")
+            else:
+                # Создание кнопок бронирований
+                row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. ' \
+                      f'Общая стоимость {booking[6]} рублей'
+                if [row] not in users_bookings:
+                    users_bookings.append([row])
+                users_bookings = sorted(users_bookings, key=lambda x: x[0].split()[4])
 
         users_bookings.append(['/menu'])
         markup_bookings = ReplyKeyboardMarkup(users_bookings, one_time_keyboard=False)
@@ -378,6 +407,7 @@ def canceling_booking(update, context):
         update.message.reply_text(emoji.emojize(':red_exclamation_mark:Ошибка введенных данных. '
                                                 'Повторите попытку:red_exclamation_mark:'))
         print(type(e))
+    stop_to_menu(update, context)
     return ConversationHandler.END
 
 
@@ -389,15 +419,26 @@ def info(update, context):
                                             "\n/cancel_booking - отменить бронь"
                                             "\nЕсли вы заметите ошибку в моей работе, то просьба сообщить об этом "
                                             "@Roma5656"))
+    stop_to_menu(update, context)
 
 
 def unrecorgnized_command(update, context):
+    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking', '/info']]
+    markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
     update.message.reply_text(
-        emoji.emojize('Нераспознанная команда. Пожалуйста, выберите то, что я знаю:slightly_frowning_face:'))
+        emoji.emojize('Нераспознанная команда. Пожалуйста, выберите то, что я знаю:slightly_frowning_face:'),
+        reply_markup=markup)
 
 
 def stop_to_menu(update, context):
+    context.user_data.clear()
     menu(update, context)
+    return ConversationHandler.END
+
+
+def stop_to_start(update, context):
+    context.user_data.clear()
+    start(update, context)
     return ConversationHandler.END
 
 
@@ -427,21 +468,21 @@ def main():
             6: [MessageHandler(Filters.text & ~Filters.command, check_booking)],
             7: [MessageHandler(Filters.text & ~Filters.command, booking_sqlite)]
         },
-        fallbacks=[CommandHandler('menu', stop_to_menu)])
+        fallbacks=[CommandHandler('menu', stop_to_menu), CommandHandler('start', stop_to_start)])
 
     conv_handler_clubs = ConversationHandler(
         entry_points=[CommandHandler('clubs', print_names_clubs)],
         states={
             1: [MessageHandler(Filters.text & ~Filters.command, print_info_about_club)],
         },
-        fallbacks=[CommandHandler('menu', stop_to_menu)])
+        fallbacks=[CommandHandler('menu', stop_to_menu), CommandHandler('start', stop_to_start)])
 
     conv_handler_cancel_booking = ConversationHandler(
         entry_points=[CommandHandler('cancel_booking', get_users_booking)],
         states={
             1: [MessageHandler(Filters.text & ~Filters.command, canceling_booking)],
         },
-        fallbacks=[CommandHandler('menu', stop_to_menu)])
+        fallbacks=[CommandHandler('menu', stop_to_menu), CommandHandler('start', stop_to_start)])
 
     dp.add_handler(conv_handler_booking)
     dp.add_handler(conv_handler_clubs)
