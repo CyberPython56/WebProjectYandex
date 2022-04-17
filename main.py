@@ -190,6 +190,7 @@ def check_booking(update, context):
             FROM clubs WHERE title = '{context.user_data['club']}'))""").fetchall()
             seats = list(map(lambda x: x[1:-2], list(map(str, halls0))))
 
+            # Проверка наличия нужного кодичества ПК
             for i in range(len(seats)):
                 id = seats[i]
                 if can_booking(context.user_data['date'], context.user_data['time'],
@@ -337,7 +338,7 @@ def print_info_about_club(update, context):
         if str(CLUBS[club][hall]['seats'])[-1] == '1' and str(CLUBS[club][hall]['seats'])[-2:] != '11':
             reply_text += f"{hall.capitalize()} - {CLUBS[club][hall]['seats']} место, "
         elif str(CLUBS[club][hall]['seats'])[-1] in ['2', '3', '4'] \
-                and str(CLUBS[club][hall]['seats'])[-2:] not in [12, 13, 14]:
+                and str(CLUBS[club][hall]['seats'])[-2:] not in ['12', '13', '14']:
             reply_text += f"{hall.capitalize()} - {CLUBS[club][hall]['seats']} места, "
         else:
             reply_text += f"{hall.capitalize()} - {CLUBS[club][hall]['seats']} мест, "
@@ -346,7 +347,7 @@ def print_info_about_club(update, context):
         if str(CLUBS[club][hall]['price'])[-1] == '1' and str(CLUBS[club][hall]['price'])[-2:] != '11':
             reply_text += f"{CLUBS[club][hall]['price']} рубль/час. "
         elif str(CLUBS[club][hall]['price'])[-1] in ['2', '3', '4'] \
-                and str(CLUBS[club][hall]['price'])[-2:] not in [12, 13, 14]:
+                and str(CLUBS[club][hall]['price'])[-2:] not in ['12', '13', '14']:
             reply_text += f"{CLUBS[club][hall]['price']} рубля/час. "
         else:
             reply_text += f"{CLUBS[club][hall]['price']} рублей/час. "
@@ -380,15 +381,25 @@ def get_users_booking(update, context):
                 cur.execute(f"""DELETE FROM booking WHERE bookingid = {booking[0]}""")
             else:
                 # Создание кнопок бронирований
-                row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. ' \
-                      f'Общая стоимость {booking[6]} рублей'
+                seats = list(map(lambda x: x[2:], users_bookings0)).count(booking[2:])
+                if str(seats)[-1] == '1' and str(seats)[-2:] != '11':
+                    row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. {seats} место '
+                elif str(seats)[-1] in ['2', '3', '4'] and str(seats)[-2:] not in ['12', '13', '14']:
+                    row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. {seats} места '
+                else:
+                    row = f'Клуб {club} {hall} зал: {booking[3]} c {booking[4]} до {booking[5]}. {seats} мест '
+                row += f'{booking[6] * seats} рублей'
                 if [row] not in users_bookings:
                     users_bookings.append([row])
                 users_bookings = sorted(users_bookings, key=lambda x: x[0].split()[4])
-
-        users_bookings.append(['/menu'])
-        markup_bookings = ReplyKeyboardMarkup(users_bookings, one_time_keyboard=False)
-        update.message.reply_text('Выберите бронирование, которое хотите отменить', reply_markup=markup_bookings)
+        if users_bookings:
+            users_bookings.append(['/menu'])
+            markup_bookings = ReplyKeyboardMarkup(users_bookings, one_time_keyboard=False)
+            update.message.reply_text('Выберите бронирование, которое хотите отменить', reply_markup=markup_bookings)
+        else:
+            update.message.reply_text('У вас нет бронирований')
+            stop_to_menu(update, context)
+            return ConversationHandler.END
     return 1
 
 
@@ -412,13 +423,15 @@ def canceling_booking(update, context):
 
 
 def info(update, context):
-    update.message.reply_text(emoji.emojize(":information:Я выпускной проект ученика Яндекс Лицея. Помимо этой "
-                                            "у меня есть еще 3 команды:"
+    update.message.reply_text(emoji.emojize(":information:Помимо этой у меня есть еще 3 команды:"
                                             "\n/clubs - узнать информацию о каждом клубе"
                                             "\n/booking - сделать бронирование"
                                             "\n/cancel_booking - отменить бронь"
-                                            "\nЕсли вы заметите ошибку в моей работе, то просьба сообщить об этом "
-                                            "@Roma5656"))
+                                            "\n:information:Я выпускной проект ученика Яндекс Лицея и еще нахожусь "
+                                            "на стадии разработки, поэтому если вы заметите ошибку в моей работе, "
+                                            "то просьба сообщить об этом @Roma5656. \nP.S. недавно моя база данных "
+                                            "была перезаписана, поэтому некоторые ваши старые бронирования могут не "
+                                            "отображаться"))
     stop_to_menu(update, context)
 
 
