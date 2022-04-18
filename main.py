@@ -458,11 +458,18 @@ def info(update, context):
 
 
 def unrecorgnized_command(update, context):
-    reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking', '/info']]
-    markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
-    update.message.reply_text(
-        emoji.emojize('Нераспознанная команда. Пожалуйста, выберите то, что я знаю:slightly_frowning_face:'),
-        reply_markup=markup)
+    if 'привет' in update.message.text.lower():
+        update.message.reply_text('Привет, привет. Выберите команду...')
+    elif 'как дела?' in update.message.text.lower():
+        update.message.reply_text('А как могут быть дела у бота? Отлично!')
+    elif 'пока' in update.message.text.lower():
+        update.message.reply_text('До новых встреч!')
+    else:
+        reply_keyboard = [['/clubs', '/booking'], ['/cancel_booking', '/info']]
+        markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
+        update.message.reply_text(
+            emoji.emojize('Нераспознанная команда. Пожалуйста, выберите то, что я знаю:slightly_frowning_face:'),
+            reply_markup=markup)
 
 
 def stop_to_menu(update, context):
@@ -501,7 +508,6 @@ def main():
 
     load_info_of_clubs()
     dp = updater.dispatcher
-
     text_handler = MessageHandler(Filters.text, unrecorgnized_command)
 
     conv_handler_booking = ConversationHandler(
