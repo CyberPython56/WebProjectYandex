@@ -1,7 +1,7 @@
-from flask import Flask, render_template, url_for, request, g, flash, abort
+from flask import Flask, render_template, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-from FDataBase import FDataBase
+
 
 
 app = Flask(__name__)
@@ -34,6 +34,11 @@ def about():
 @app.route('/user/<string:name>/<int:id>')
 def user(name, id):
     return "User page: " + name + " - " + str(id)
+
+
+@app.route('/create')
+def create():
+    return render_template("create.html")
 
 
 if __name__ == "__main__":
