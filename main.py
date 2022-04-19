@@ -1,10 +1,9 @@
+import os
 import copy
-import logging
 import sqlite3
 from datetime import time, datetime, timedelta, date
 from math import ceil
-import os
-
+import logging
 import emoji
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import CommandHandler, ConversationHandler
@@ -430,7 +429,8 @@ def canceling_booking(update, context):
         date = update.message.text.split()[4]
         time_start = update.message.text.split()[6]
         time_finish = update.message.text.split()[8][:-1]
-        price = int(update.message.text.split()[11])
+        seats = int(update.message.text.split()[9])
+        price = int(update.message.text.split()[11]) / seats
         with sqlite3.connect('YandexProject.sqlite') as con:
             cur = con.cursor()
             cur.execute(f"""DELETE FROM Booking WHERE name = '{update.message.from_user['full_name']}' AND date = 
