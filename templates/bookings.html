@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        table, th, td {
+          border:1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <table  style="width:100%">
+        <tr>
+            <th>Номер заказа</th>
+            <th>Номер компьютера</th>
+            <th>Имя</th>
+            <th>Дата</th>
+            <th>Начало</th>
+            <th>Конец</th>
+            <th>Цена</th>
+        </tr>
+        {% for e in orders %}
+              <tr>
+                <td>{{ e.id }}</td>
+                <td>{{ e.computer_id }}</td>
+                <td>{{ e.name }}</td>
+                <td>{{ e.date }}</td>
+                <td>{{ e.time_start }}</td>
+                <td>{{ e.time_finish }}</td>
+                <td>{{ e.full_price }}</td>
+              </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
