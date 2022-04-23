@@ -242,10 +242,10 @@ def booking_sqlite(update, context):
 
             for i in context.user_data['computers']:
                 cur.execute(f"""INSERT INTO booking(ComputerId, date, time_start, time_finish, 
-                full_price, name) VALUES({i}, '{context.user_data['date']}', 
+                full_price, name, userid) VALUES({i}, '{context.user_data['date']}', 
                 '{context.user_data['time']}', '{context.user_data['time_finish']}', 
                 {context.user_data['full_price'] / len(context.user_data['computers'])}, 
-                '{context.user_data['name']}')""")
+                '{context.user_data['name']}', {update.message.from_user['id']})""")
 
         update.message.reply_text(emoji.emojize(':check_mark_button:Успешное бронирование!'),
                                   reply_markup=ReplyKeyboardRemove())
@@ -383,10 +383,10 @@ def print_info_about_club(update, context):
 def get_users_booking(update, context):
     with sqlite3.connect('YandexProject.sqlite') as con:
         cur = con.cursor()
-        name = update.message.from_user['full_name']
+        id = update.message.from_user['id']
         datetime_now = datetime.now()
 
-        users_bookings0 = cur.execute(f"""SELECT * FROM booking WHERE name = '{name}'""").fetchall()
+        users_bookings0 = cur.execute(f"""SELECT * FROM booking WHERE userid = '{id}'""").fetchall()
         users_bookings = []
         for booking in users_bookings0:
             hall = cur.execute(f"""SELECT VIP FROM halls WHERE hallid = (SELECT hallid FROM computers 
@@ -433,7 +433,7 @@ def canceling_booking(update, context):
         price = int(update.message.text.split()[11]) / seats
         with sqlite3.connect('YandexProject.sqlite') as con:
             cur = con.cursor()
-            cur.execute(f"""DELETE FROM Booking WHERE name = '{update.message.from_user['full_name']}' AND date = 
+            cur.execute(f"""DELETE FROM Booking WHERE userid = '{update.message.from_user['id']}' AND date = 
             '{date}' AND time_start = '{time_start}' AND time_finish = '{time_finish}' AND full_price = {price}""")
         update.message.reply_text(emoji.emojize(':check_mark_button:Бронирование отменено'))
     except Exception as e:
